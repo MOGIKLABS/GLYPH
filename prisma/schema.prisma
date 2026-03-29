@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum GenerationStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  REJECTED
+}
+
+enum RightsStatus {
+  DRAFT
+  CLEARED
+  RESTRICTED
+}
+
+enum TakedownStatus {
+  OPEN
+  UNDER_REVIEW
+  ACTIONED
+  REJECTED
+}
+
+model Generation {
+  id                   String           @id @default(cuid())
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  status               GenerationStatus @default(QUEUED)
+  title                String?
+  prompt               String
+  durationSecRequested Int
+  bpm                  Int?
+  key                  String?
+  commercialUse        Boolean          @default(true)
+  declaredStyleRefs    String           @default("")
+  modelProvider        String
+  modelName            String
+  errorMessage         String?
+  audioPath            String?
+  audioMime            String?
+  audioDurationSec     Int?
+
+  receipt Receipt?
+  rights  RightsRecord?
+}
+
+model Receipt {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  generationId String   @unique
+  modelProvider String
+  modelName     String
+  promptHash    String
+  outputHash    String?
+  paramsJson    String
+
+  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+}
+
+model RightsRecord {
+  id                   String       @id @default(cuid())
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  generationId         String       @unique
+  commercialUse        Boolean
+  status               RightsStatus @default(DRAFT)
+  declaredStyleRefs    String       @default("")
+  licenseNotes         String       @default("")
+
+  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+}
+
+model TakedownNotice {
+  id            String         @id @default(cuid())
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  status        TakedownStatus @default(OPEN)
+  claimantName  String
+  contactEmail  String
+  workDescription String
+  basis         String
+  generationId  String?
+
+  events AuditEvent[]
+}
+
+model AuditEvent {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  type          String
+  subjectType   String
+  subjectId     String
+  detailJson    String   @default("{}")
+  takedownId    String?
+
+  takedown TakedownNotice? @relation(fields: [takedownId], references: [id], onDelete: Cascade)
+}
+
+model BlockedTerm {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  term      String   @unique
+}
+
