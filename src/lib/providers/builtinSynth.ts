@@ -1,4 +1,5 @@
-import { writeWavFromSamples } from "@/lib/audio/wav";
+import { buildWavBuffer } from "@/lib/audio/wav";
+import { uploadAudio } from "@/lib/storage";
 import type { GenerateTrackInput, MusicGenerationProvider, ProviderGenerateResult } from "@/lib/providers/types";
 
 function hzFromKey(key: string | null) {
@@ -37,7 +38,6 @@ function envADSR(t: number, a: number, d: number, s: number, r: number, total: n
 export class BuiltinSynthProvider implements MusicGenerationProvider {
   async generateTrack(input: GenerateTrackInput): Promise<ProviderGenerateResult> {
     try {
-      const outDir = process.env.STORAGE_DIR ?? "storage";
       const sampleRate = 44100;
       const dur = Math.max(10, Math.min(input.durationSec, 180));
       const totalSamples = dur * sampleRate;
@@ -62,10 +62,8 @@ export class BuiltinSynthProvider implements MusicGenerationProvider {
         const beat = t / beatSec;
         const beatInBar = beat % 4;
 
-        // Kick on beats 1 and 3 (beatInBar 0 and 2)
         const kickTrig = beatInBar < 0.02 || (beatInBar >= 2 && beatInBar < 2.02);
         const snareTrig = (beatInBar > 1 && beatInBar < 1.02) || (beatInBar > 3 && beatInBar < 3.02);
-        // Hi-hat on every 8th note (every 0.5 beats)
         const hatTrig = (beat % 0.5) < (hatDecay * 3 / beatSec);
 
         const kickT = (beatInBar % 2) * beatSec;
@@ -93,14 +91,16 @@ export class BuiltinSynthProvider implements MusicGenerationProvider {
         samples[i] = clampSample(kick + snare + hat + bass);
       }
 
-      const wav = await writeWavFromSamples({ samples, sampleRate, outDir });
+      const buf = buildWavBuffer(samples, sampleRate);
+      const key = await uploadAudio(buf, "audio/wav", "wav");
+
       return {
         ok: true,
         output: {
           modelProvider: "builtin-synth",
           modelName: "glyph-synth-v1",
-          audioPath: wav.path,
-          audioMime: wav.mime,
+          audioPath: key,
+          audioMime: "audio/wav",
           audioDurationSec: Math.round(dur)
         }
       };

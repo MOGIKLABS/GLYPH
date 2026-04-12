@@ -1,7 +1,4 @@
-import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import { join } from "path";
-
+import { uploadAudio } from "@/lib/storage";
 import type {
   GenerateTrackInput,
   MusicGenerationProvider,
@@ -40,30 +37,20 @@ export class ReplicateMusicGenProvider implements MusicGenerationProvider {
 
     try {
       const createBody: Record<string, unknown> = {
-        input: {
-          prompt: input.prompt,
-          duration: seconds
-        }
+        input: { prompt: input.prompt, duration: seconds }
       };
-
       if (version) createBody.version = version;
       else createBody.model = model;
 
       const createRes = await fetch("https://api.replicate.com/v1/predictions", {
         method: "POST",
-        headers: {
-          authorization: `Token ${token}`,
-          "content-type": "application/json"
-        },
+        headers: { authorization: `Token ${token}`, "content-type": "application/json" },
         body: JSON.stringify(createBody)
       });
 
       if (!createRes.ok) {
         const text = await createRes.text().catch(() => "");
-        return {
-          ok: false,
-          error: `Replicate request failed (${createRes.status}): ${text || createRes.statusText}`
-        };
+        return { ok: false, error: `Replicate request failed (${createRes.status}): ${text || createRes.statusText}` };
       }
 
       let pred = (await createRes.json()) as ReplicatePrediction;
@@ -80,58 +67,44 @@ export class ReplicateMusicGenProvider implements MusicGenerationProvider {
         });
         if (!pollRes.ok) {
           const text = await pollRes.text().catch(() => "");
-          return {
-            ok: false,
-            error: `Replicate poll failed (${pollRes.status}): ${text || pollRes.statusText}`
-          };
+          return { ok: false, error: `Replicate poll failed (${pollRes.status}): ${text || pollRes.statusText}` };
         }
         pred = (await pollRes.json()) as ReplicatePrediction;
       }
 
       if (pred.status !== "succeeded") {
         const msg =
-          typeof pred.error === "string"
-            ? pred.error
-            : pred.error
-              ? JSON.stringify(pred.error)
-              : "Replicate generation failed.";
+          typeof pred.error === "string" ? pred.error
+          : pred.error ? JSON.stringify(pred.error)
+          : "Replicate generation failed.";
         return { ok: false, error: msg };
       }
 
       const out = pred.output;
       const url =
-        typeof out === "string"
-          ? out
-          : Array.isArray(out) && typeof out[0] === "string"
-            ? (out[0] as string)
-            : null;
+        typeof out === "string" ? out
+        : Array.isArray(out) && typeof out[0] === "string" ? (out[0] as string)
+        : null;
 
       if (!url) return { ok: false, error: "Replicate returned no audio URL." };
 
       const audioRes = await fetch(url);
       if (!audioRes.ok) {
         const text = await audioRes.text().catch(() => "");
-        return {
-          ok: false,
-          error: `Failed to download audio (${audioRes.status}): ${text || audioRes.statusText}`
-        };
+        return { ok: false, error: `Failed to download audio (${audioRes.status}): ${text || audioRes.statusText}` };
       }
 
       const mime = audioRes.headers.get("content-type") || "application/octet-stream";
       const buf = Buffer.from(await audioRes.arrayBuffer());
-
-      const outDir = process.env.STORAGE_DIR ?? "storage";
-      await mkdir(outDir, { recursive: true });
-      const filename = `${randomUUID()}.${extensionFromUrl(url)}`;
-      const path = join(outDir, filename);
-      await writeFile(path, buf);
+      const ext = extensionFromUrl(url);
+      const key = await uploadAudio(buf, mime, ext);
 
       return {
         ok: true,
         output: {
           modelProvider: "replicate",
           modelName: `musicgen:${version ? "version" : model}`,
-          audioPath: path,
+          audioPath: key,
           audioMime: mime,
           audioDurationSec: seconds
         }
@@ -141,4 +114,3 @@ export class ReplicateMusicGenProvider implements MusicGenerationProvider {
     }
   }
 }
-

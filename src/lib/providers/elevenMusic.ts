@@ -1,7 +1,4 @@
-import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import { join } from "path";
-
+import { uploadAudio } from "@/lib/storage";
 import type {
   GenerateTrackInput,
   MusicGenerationProvider,
@@ -61,10 +58,7 @@ function extractAudioFromMultipart(body: Buffer, boundary: string) {
 export class ElevenMusicProvider implements MusicGenerationProvider {
   async generateTrack(input: GenerateTrackInput): Promise<ProviderGenerateResult> {
     const apiKey = process.env.ELEVENLABS_API_KEY;
-    const baseUrl = (process.env.ELEVENLABS_BASE_URL ?? "https://api.elevenlabs.io").replace(
-      /\/$/,
-      ""
-    );
+    const baseUrl = (process.env.ELEVENLABS_BASE_URL ?? "https://api.elevenlabs.io").replace(/\/$/, "");
 
     if (!apiKey) {
       return { ok: false, error: "ElevenLabs is not configured. Set ELEVENLABS_API_KEY." };
@@ -115,26 +109,22 @@ export class ElevenMusicProvider implements MusicGenerationProvider {
           return { ok: false, error: "Failed to extract audio from ElevenLabs multipart response." };
         }
         mime = sanitizeMime(extracted.mime);
-        buf = extracted.buf;
+        buf = Buffer.from(extracted.buf);
       }
 
       if (!mime.startsWith("audio/")) {
         mime = outputFormat.startsWith("wav") ? "audio/wav" : "audio/mpeg";
       }
 
-      const outDir = process.env.STORAGE_DIR ?? "storage";
-      await mkdir(outDir, { recursive: true });
       const ext = mime.includes("wav") ? "wav" : mime.includes("mpeg") ? "mp3" : "bin";
-      const filename = `${randomUUID()}.${ext}`;
-      const path = join(outDir, filename);
-      await writeFile(path, buf);
+      const key = await uploadAudio(buf, mime, ext);
 
       return {
         ok: true,
         output: {
           modelProvider: "elevenlabs",
           modelName: modelId,
-          audioPath: path,
+          audioPath: key,
           audioMime: mime,
           audioDurationSec: seconds
         }

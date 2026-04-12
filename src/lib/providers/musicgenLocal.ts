@@ -1,7 +1,4 @@
-import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import { join } from "path";
-
+import { uploadAudio } from "@/lib/storage";
 import type {
   GenerateTrackInput,
   MusicGenerationProvider,
@@ -42,6 +39,7 @@ export class MusicGenLocalProvider implements MusicGenerationProvider {
           key: input.key
         })
       });
+
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         return { ok: false, error: `MusicGen request failed (${res.status}): ${text || res.statusText}` };
@@ -49,20 +47,17 @@ export class MusicGenLocalProvider implements MusicGenerationProvider {
 
       const json = (await res.json()) as MusicGenResponse;
       const buf = Buffer.from(json.audioBase64, "base64");
-      const outDir = process.env.STORAGE_DIR ?? "storage";
-      await mkdir(outDir, { recursive: true });
-      const ext = extensionForMime(json.mimeType || "application/octet-stream");
-      const filename = `${randomUUID()}.${ext}`;
-      const path = join(outDir, filename);
-      await writeFile(path, buf);
+      const mime = json.mimeType || "application/octet-stream";
+      const ext = extensionForMime(mime);
+      const key = await uploadAudio(buf, mime, ext);
 
       return {
         ok: true,
         output: {
           modelProvider: "musicgen-local",
           modelName: json.modelName ?? "musicgen",
-          audioPath: path,
-          audioMime: json.mimeType || "application/octet-stream",
+          audioPath: key,
+          audioMime: mime,
           audioDurationSec: json.durationSec ?? input.durationSec
         }
       };
@@ -71,4 +66,3 @@ export class MusicGenLocalProvider implements MusicGenerationProvider {
     }
   }
 }
-

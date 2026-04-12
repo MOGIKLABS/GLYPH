@@ -1,24 +1,21 @@
-import { writeSineWav } from "@/lib/audio/wav";
-import type {
-  GenerateTrackInput,
-  MusicGenerationProvider,
-  ProviderGenerateResult
-} from "@/lib/providers/types";
+import { buildSineWavBuffer } from "@/lib/audio/wav";
+import { uploadAudio } from "@/lib/storage";
+import type { GenerateTrackInput, MusicGenerationProvider, ProviderGenerateResult } from "@/lib/providers/types";
 
 export class MockLyriaProvider implements MusicGenerationProvider {
   async generateTrack(input: GenerateTrackInput): Promise<ProviderGenerateResult> {
     try {
-      const outDir = process.env.STORAGE_DIR ?? "storage";
       const base = input.bpm ? Math.min(880, Math.max(110, input.bpm * 2)) : 220;
-      const wav = await writeSineWav({ durationSec: input.durationSec, freqHz: base, outDir });
+      const { buf, durationSec } = buildSineWavBuffer(input.durationSec, 44100, base);
+      const key = await uploadAudio(buf, "audio/wav", "wav");
       return {
         ok: true,
         output: {
           modelProvider: "mock",
           modelName: "lyria-3-mock",
-          audioPath: wav.path,
-          audioMime: wav.mime,
-          audioDurationSec: wav.durationSec
+          audioPath: key,
+          audioMime: "audio/wav",
+          audioDurationSec: durationSec
         }
       };
     } catch (e: unknown) {
