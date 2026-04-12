@@ -9,7 +9,7 @@ function BubbleLink({
   label,
   className
 }: {
-  href: string;
+  href: `/${string}`;
   icon: Parameters<typeof Icon>[0]["name"];
   label: string;
   className?: string;
