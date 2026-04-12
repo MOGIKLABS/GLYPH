@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { Icon } from "@/components/ui/icon";
@@ -9,7 +10,7 @@ function BubbleLink({
   label,
   className
 }: {
-  href: `/${string}`;
+  href: Route;
   icon: Parameters<typeof Icon>[0]["name"];
   label: string;
   className?: string;
